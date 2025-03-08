@@ -31,6 +31,7 @@ export const LandingPage = () => {
   const capturedDeviceInfo = Session.get("capturedDeviceInfo") || {};
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [successMessage, setSuccessMessage] = useState("");
+  const [currentNotification, setCurrentNotification] = useState(null)
 
   const [profile, setProfile] = useState({
     firstName: "",
@@ -64,9 +65,12 @@ export const LandingPage = () => {
 
       if (!newNotification) return;
 
+      console.log("NEW NOTIFICATION", newNotification)
+
       setNotificationId(newNotification.appId);
 
       if (newNotification.status === "pending") {
+        await getNotificationId();
         setIsActionsModalOpen(true);
       } else {
         try {
@@ -106,7 +110,9 @@ export const LandingPage = () => {
       "notificationHistory.getLastIdByUser",
       userProfile._id
     );
-    return notificationId;
+    setCurrentNotification(notificationId)
+    console.log(notificationId)
+    return notificationId.notificationId;
   };
 
   const handleStatusUpdate = async (id, newStatus) => {
@@ -322,6 +328,15 @@ export const LandingPage = () => {
     const notfId = await getNotificationId();
     await handleStatusUpdate(notfId, "approved");
     setIsResultModalOpen(true);
+    setIsActionsModalOpen(false);
+    fetchNotificationHistory();
+  };
+
+  const handleTimeout = async () => {
+    sendUserAction(notificationId, "timeout");
+
+    const notfId = await getNotificationId();
+    await handleStatusUpdate(notfId, "timeout");
     setIsActionsModalOpen(false);
     fetchNotificationHistory();
   };
@@ -555,6 +570,8 @@ export const LandingPage = () => {
         onApprove={handleApprove}
         onReject={handleReject}
         onClose={handleCloseActionModal}
+        onTimeOut = {handleTimeout}
+        currentNotification={currentNotification}
       />
       <ResultModal
         isOpen={isResultModalOpen}

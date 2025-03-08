@@ -43,7 +43,7 @@ Meteor.methods({
     check(notificationId, String);
     check(status, String);
 
-    if (!['pending', 'approved', 'rejected'].includes(status)) {
+    if (!['pending', 'approved', 'rejected', 'timeout'].includes(status)) {
       throw new Meteor.Error('invalid-status', 'Status must be pending, accepted, or rejected');
     }
 
@@ -64,10 +64,10 @@ Meteor.methods({
 
   return NotificationHistory.findOneAsync(
     { 'userId': userId  },
-    { sort: { createdAt: -1 }, fields: { notificationId: 1 } }
+    { sort: { createdAt: -1 } }
   ).then((lastNotification) => {
     console.log("LAST NOTIFICATION ------------------------------------------------", lastNotification)
-    return lastNotification ? lastNotification.notificationId : null;
+    return lastNotification ? lastNotification : null;
   }).catch((error) => {
     console.error("Error fetching last notification:", error);
     throw new Meteor.Error("database-error", "Failed to fetch last notification");

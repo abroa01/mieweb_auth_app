@@ -354,7 +354,7 @@ Meteor.methods({
   },
   'updateAppId': async function(username, appId) {
     try {
-      const result = await HTTP.post("https://30b3-50-221-78-186.ngrok-free.app/update-app-id", {
+      const result = await HTTP.post("https://0ea8-50-221-78-186.ngrok-free.app/update-app-id", {
         data: {
           username: username,
           appId: appId
