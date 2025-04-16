@@ -47,103 +47,121 @@ if (Meteor.isServer) {
 // Define methods for DeviceDetails
 Meteor.methods({
   /**
-   * Upsert device details
-   * @param {Object} data - Device details data
-   * @returns {String} Generated appId
-   */
-  'deviceDetails': async function(data) {
-    check(data, {
-      username: String,
-      biometricSecret: String,
-      userId: String,
-      email: String,
-      deviceUUID: String,
-      fcmToken: String,
-      firstName: String,
-      lastName: String
-    });
+ * Upsert device details
+ * @param {Object} data - Device details data
+ * @returns {String} Generated appId
+ */
+'deviceDetails': async function(data) {
+  console.log(" ### Log Step 6 : Inside /utils/api/deviceDetails.js and checking all the data received");
   
-    const creationTime = new Date().toISOString();
-    const appId = generateAppId(data.deviceUUID, data.username, creationTime);
+  // Extended check to include new fields
+  check(data, Match.ObjectIncluding({
+    username: String,
+    biometricSecret: String,
+    userId: String,
+    email: String,
+    deviceUUID: String,
+    fcmToken: String,
+    firstName: String,
+    lastName: String,
+    approvalStatus: Match.Maybe(String),
+    isPrimary: Match.Maybe(Boolean)
+  }));
+  
+  const creationTime = new Date().toISOString();
+  const appId = generateAppId(data.deviceUUID, data.username, creationTime);
+  console.log(" ### Log Step 6.1  : Inside /utils/api/deviceDetails.js,  generating app Id", JSON.stringify({appId}));
+  
+  const userDeviceDoc = await DeviceDetails.findOneAsync({ userId: data.userId });
+  console.log(`### Log Step 6.2 : Inside /utils/api/deviceDetails.js, fetching existing device details if any(against userId : ${data.userId}), userDeviceDoc: ${JSON.stringify(userDeviceDoc)}`);
+  
+  // Set default values for new fields
+  const approvalStatus = data.approvalStatus || 'approved';
+  const isPrimary = data.isPrimary !== undefined ? data.isPrimary : false;
+  
+  if (userDeviceDoc) {
+    // Check if device already exists
+    const existingDeviceIndex = userDeviceDoc.devices.findIndex(
+      device => device.deviceUUID === data.deviceUUID
+    );
+    console.log(`### Log Step 6.2 : Inside /utils/api/deviceDetails.js, fetching existing device details, existingDeviceIndex: ${existingDeviceIndex}`);
     
-    const userDeviceDoc = await DeviceDetails.findOneAsync({ userId: data.userId });
-    console.log(`userDeviceDoc: ${JSON.stringify(userDeviceDoc)}`);
-    
-    
-    if (userDeviceDoc) {
-      // Check if device already exists
-      const existingDeviceIndex = userDeviceDoc.devices.findIndex(
-        device => device.deviceUUID === data.deviceUUID
-      );
-      console.log(`existingDeviceIndex: ${existingDeviceIndex}`);
-      if (existingDeviceIndex !== -1) {
-        // Update existing device
-        await DeviceDetails.updateAsync(
-          { 
-            userId: data.userId,            
-          },
-          {
-            $set: {
-              email: data.email,
-              username: data.username,                           
-              lastUpdated: new Date(),
-              [`devices.${existingDeviceIndex}`]: {
-                deviceUUID: data.deviceUUID,
-                appId: userDeviceDoc.devices[existingDeviceIndex].appId,
-                biometricSecret: data.biometricSecret,
-                fcmToken: data.fcmToken,
-                lastUpdated: new Date()
-              }
-            }
+    if (existingDeviceIndex !== -1) {
+      // Update existing device
+      console.log(`### Log Step 6.3 : Inside /utils/api/deviceDetails.js, Existing device details found and updating it, existingDeviceIndex: ${existingDeviceIndex}`);
+      await DeviceDetails.updateAsync(
+        { userId: data.userId },
+        {
+          $set: {
+            email: data.email,
+            username: data.username,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            lastUpdated: new Date(),
+            [`devices.${existingDeviceIndex}.deviceUUID`]: data.deviceUUID,
+            [`devices.${existingDeviceIndex}.appId`]: userDeviceDoc.devices[existingDeviceIndex].appId,
+            [`devices.${existingDeviceIndex}.biometricSecret`]: data.biometricSecret,
+            [`devices.${existingDeviceIndex}.fcmToken`]: data.fcmToken,
+            [`devices.${existingDeviceIndex}.approvalStatus`]: approvalStatus,
+            [`devices.${existingDeviceIndex}.isPrimary`]: isPrimary,
+            [`devices.${existingDeviceIndex}.lastUpdated`]: new Date()
           }
-        );
-        return userDeviceDoc.devices[existingDeviceIndex].appId;
-      } else {
-        // Add new device to existing user document
-        await DeviceDetails.updateAsync(
-          { userId: data.userId },
-          {
-            $push: {
-              devices: {
-                deviceUUID: data.deviceUUID,
-                appId: appId,
-                biometricSecret: data.biometricSecret,
-                fcmToken: data.fcmToken,
-                lastUpdated: new Date()
-              }
-            },
-            $set: {
-              email: data.email,
-              username: data.username,
-              firstName: data.firstName,
-              lastName: data.lastName,
+        }
+      );
+      return userDeviceDoc.devices[existingDeviceIndex].appId;
+    } else {
+      // Add new device to existing user document
+      console.log('### Log Step 6.3 : Inside /utils/api/deviceDetails.js, Existing device details not found thus creating a new device details against the existing user');
+      await DeviceDetails.updateAsync(
+        { userId: data.userId },
+        {
+          $push: {
+            devices: {
+              deviceUUID: data.deviceUUID,
+              appId: appId,
+              biometricSecret: data.biometricSecret,
+              fcmToken: data.fcmToken,
+              approvalStatus: approvalStatus,
+              isPrimary: isPrimary,
               lastUpdated: new Date()
             }
+          },
+          $set: {
+            email: data.email,
+            username: data.username,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            lastUpdated: new Date()
           }
-        );
-        return appId;
-      }
-    } else {
-      // Create new user document with first device
-      await DeviceDetails.insertAsync({
-        userId: data.userId,
-        email: data.email,
-        username: data.username,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        devices: [{
-          deviceUUID: data.deviceUUID,
-          appId: appId,
-          biometricSecret: data.biometricSecret,
-          fcmToken: data.fcmToken,
-          lastUpdated: new Date()
-        }],
-        createdAt: new Date(),
-        lastUpdated: new Date()
-      });
+        }
+      );
       return appId;
     }
-  },
+  } else {
+    // Create new user document with first device
+    console.log('### Log Step 6.4 : Inside /utils/api/deviceDetails.js, Create new user document with first device ');
+    await DeviceDetails.insertAsync({
+      userId: data.userId,
+      email: data.email,
+      username: data.username,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      devices: [{
+        deviceUUID: data.deviceUUID,
+        appId: appId,
+        biometricSecret: data.biometricSecret,
+        fcmToken: data.fcmToken,
+        approvalStatus: approvalStatus,
+        isPrimary: isPrimary,
+        lastUpdated: new Date()
+      }],
+      createdAt: new Date(),
+      lastUpdated: new Date()
+    });
+    return appId;
+  }
+},
+
   
   /**
    * Update FCM token for a device
