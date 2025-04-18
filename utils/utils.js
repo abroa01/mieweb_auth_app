@@ -1,3 +1,5 @@
+import { ApprovalTokens } from "./api/approvalTokens";
+
 export const formatDateTime = (isoString) => {
     if (!isoString) return "";
   
@@ -15,4 +17,14 @@ export const formatDateTime = (isoString) => {
   
     return `${formattedDate} ${formattedTime}`;
   };
-  
+
+  export const isValidToken = async(userId, token) => {
+    // Look up the token
+    const tokenRecord = await ApprovalTokens.findOneAsync({
+      userId,
+      token,
+      expiresAt: { $gt: new Date() }
+    });
+
+    return tokenRecord;
+  }

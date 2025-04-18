@@ -1,0 +1,1 @@
+export const ApprovalTokens = new Mongo.Collection('approvalTokens');
