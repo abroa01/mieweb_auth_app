@@ -383,8 +383,7 @@ Meteor.methods({
         userId = existingUser._id;
       } else {
         // Create new user account
-        userId = await new Promise((resolve, reject) => {
-          Accounts.createUser({
+        userId = await Accounts.createUser({
             email,
             username,
             password: pin,
@@ -405,7 +404,6 @@ Meteor.methods({
               }
             }
           });
-        });
       }
 
       // Register or update device details

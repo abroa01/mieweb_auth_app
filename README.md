@@ -3,7 +3,8 @@
 This is a Meteor application that uses React for the frontend and supports Cordova for mobile platforms. It integrates Firebase Cloud Messaging (FCM) for push notifications using the `@havesource/cordova-plugin-push`.
 
 ---
-## Sequence Diagram 
+
+## 📊 Sequence Diagram 
 ```mermaid
 sequenceDiagram
     participant User as User
@@ -19,126 +20,174 @@ sequenceDiagram
     User-->>PhoneApp: Interact with Notification (Ok/Cancel)
     PhoneApp-->>MeteorServer: Notify User Response (Ok/Cancel)
     MeteorServer-->>BashScript: Return Response (Ok/Cancel)
+````
 
-```
 ---
 
-## Screenshots
-
+## 📷 Screenshots
 
 ### App HomePage
+
 <img width="450" alt="image" src="https://github.com/user-attachments/assets/ceaab48e-3465-4b75-8932-174e2e2ff231" />
 
+### Push Notification Example
 
-
-### Push Notification Example (old)
 ![Push Notification](screenshots/push.png)
 
 ---
 
-## How to Set Up and Run
+## 🔧 Local Development Setup
 
-### Step 1: Clone the Project
+### 1. Clone the Project
+
 ```bash
 git clone https://github.com/abroa01/mieweb_auth_app.git
 cd mieweb_auth_app
 ```
 
-### Step 2: Install Meteor
-If you don’t have Meteor installed:
+### 2. Install Meteor
+
 ```bash
 curl https://install.meteor.com/ | sh
 ```
 
-### Step 3: Install Dependencies
-Run the following command to install the required packages:
+### 3. Install Dependencies
+
 ```bash
 meteor npm install
 ```
 
-### Step 4: Run the App
-Start the application locally:
-```bash
-meteor run
-```
-Access it in your browser at `http://localhost:3000`.
+### 4. Setup Firebase
+
+* Create a Firebase project
+* Enable **Cloud Messaging**
+* Download `google-services.json` and place it at:
+
+  ```
+  .meteor/local/cordova-build/platforms/android/app/google-services.json
+  ```
+* Also, download the **Firebase Admin SDK JSON** file and place it at:
+
+  ```
+  server/private/firebase-admin-key.json
+  ```
 
 ---
 
-## For Mobile Platforms (Cordova)
+## 📱 Run Mobile App (Local)
 
-### Step 1: Add a Platform
-To build for Android:
+### Android
+
 ```bash
 meteor add-platform android
-```
-
-### Step 2: Install Cordova Push Plugin
-Add the FCM push notification plugin:
-```bash
 meteor add cordova:@havesource/cordova-plugin-push@5.0.5
-```
-
-### Step 3: Run on Emulator or Device
-```bash
-meteor run android
 meteor run android-device
 ```
 
-### Step 4: Configure Firebase
-1. Download the `google-services.json` file from your Firebase Console.
-2. Place it at the app level in the directory: `.meteor/local/cordova-build/platforms/android/app/`.
-3. Ensure FCM is enabled in your Firebase project.
+> ⚠️ Make sure to run the Meteor server with a public IP accessible to your device. Example:
+
+```bash
+meteor run android-device --mobile-server=https://<your-ngrok-url>
+```
+
+### iOS (Mac Only)
+
+```bash
+meteor add-platform ios
+meteor run ios-device --mobile-server=https://<your-ngrok-url>
+```
 
 ---
 
-## Push Notifications
+## 📦 Production Build Instructions
+
+### 1. Start Local Server with Public URL
+
+Use `ngrok` to expose your local server:
+
+```bash
+ngrok http 3000
+```
+
+### 2. Build for Android
+
+```bash
+meteor build output/ --architecture os.linux.x86_64 --server=https://<your-ngrok-url>
+```
+
+This creates a signed Android App Bundle (`.aab`) in `output/`.
+
+### 3. Firebase Config Placement
+
+* During GitHub Actions or production builds, ensure:
+
+  * `google-services.json` is copied to:
+
+    ```
+    .meteor/local/cordova-build/platforms/android/app/google-services.json
+    ```
+  * `firebase-admin-key.json` is stored in and also update the location in the server/firebase.js file:
+
+    ```
+    server/private/firebase-admin-key.json
+    ```
+
+---
+
+## 🚀 Push Notifications
 
 ### Sending Push Notifications to Meteor Server
-To send push notifications, follow these steps:
 
-1. Ensure the server is running locally on `http://localhost:3000`.
-2. Use the following `curl` command to send a push notification:
-   ```bash
-   curl -X POST \
-   -H "Content-Type: application/json" \
-   -d '{
-       "token": "<FCM_TOKEN>",
-       "title": "Test Notification",
-       "body": "This is a test message from Meteor.",
-       "data": {"customKey": "customValue"}
-   }' \
-   http://localhost:3000/send-notification
-   ```
-   Replace `<FCM_TOKEN>` with the actual FCM token obtained during device registration.
+Use the following curl command:
 
-3. The server responds with a JSON object confirming the message delivery:
-   ```json
-   {"success":true,"messageId":"projects/miewebauthapp/messages/0:1735348363018943%a09965e2a09965e2"}
-   ```
+```bash
+curl -X POST \
+-H "Content-Type: application/json" \
+-d '{
+    "token": "<FCM_TOKEN>",
+    "title": "Test Notification",
+    "body": "This is a test message from Meteor.",
+    "data": {"customKey": "customValue"}
+}' \
+http://localhost:3000/send-notification
+```
 
----
+Response:
 
-## File Overview
-- **`client/main.jsx`**:
-  - Initializes the React app.
-  - Configures Cordova and FCM for mobile devices.
-  - Manages push notifications (registration, handling, and errors).
-- **`mobile-config.js`**: Cordova app settings (e.g., icons, permissions).
-- **`server/main.js`**: Server-side entry point and notification handling logic.
+```json
+{"success":true,"messageId":"projects/..."}
+```
 
 ---
 
-## Requirements
-- Node.js and npm
-- Meteor
-- Android Studio (for Android builds), Android SDK, platform-tools, Android Build-Tools (latest version)
-- Firebase account with an active project for FCM
+## 🗂 File Overview
+
+| File/Folder                                                              | Purpose                              |
+| ------------------------------------------------------------------------ | ------------------------------------ |
+| `client/main.jsx`                                                        | React UI + Cordova push registration |
+| `server/main.js`                                                         | Meteor server + FCM push logic       |
+| `server/private/firebase-admin-key.json`                                 | Firebase Admin SDK (used by server)  |
+| `.meteor/local/cordova-build/platforms/android/app/google-services.json` | Firebase config for Android app      |
+| `mobile-config.js`                                                       | Cordova app metadata                 |
 
 ---
 
-## Questions ?
-Feel free to open an issue in the repository if you encounter any problems.
+## 🤖 GitHub Actions Build (Optional)
+
+A GitHub Actions workflow is provided to build your `.aab` file for Android. See `.github/workflows/android-build.yml` (included in repo).
 
 ---
+
+## 📋 Firebase Setup Summary
+
+| Component              | Required? | Location                                             |
+| ---------------------- | --------- | ---------------------------------------------------- |
+| `google-services.json` | ✅         | `.meteor/local/cordova-build/platforms/android/app/` |
+| Firebase Admin SDK     | ✅         | `server/private/firebase-admin-key.json`             |
+
+---
+
+## ❓ Questions?
+
+Open an issue if you encounter any problems!
 

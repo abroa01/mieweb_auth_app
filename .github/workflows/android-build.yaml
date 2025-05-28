@@ -1,0 +1,71 @@
+name: Meteor Cordova Android Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  METEOR_SERVER_URL: ${{ secrets.METEOR_SERVER_URL }}
+  MONGO_URL: ${{ secrets.MONGO_URL }}
+  ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install Java (OpenJDK 11)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: 11
+
+    - name: Install Android SDK Commandline Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unzip wget lib32stdc++6 lib32z1
+        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        cd $ANDROID_SDK_ROOT
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+        unzip cmdline-tools.zip
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+
+    - name: Install Meteor
+      run: curl https://install.meteor.com/ | sh
+
+    - name: Install Cordova CLI
+      run: npm install -g cordova
+
+    - name: Install project dependencies
+      run: meteor npm install
+
+    - name: Copy Firebase google-services.json
+      run: |
+        echo "$FIREBASE_GOOGLE_SERVICES_JSON_BASE64" | base64 -d > .meteor/local/cordova-build/platforms/android/app/google-services.json
+      env:
+        FIREBASE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
+
+    - name: Build Meteor Cordova Android tarball
+      run: |
+        meteor build ../build-output --server "$METEOR_SERVER_URL" --cordova --verbose
+      env:
+        MONGO_URL: ${{ secrets.MONGO_URL }}
+
+    - name: Upload Android tarball artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: android-tarball
+        path: ../build-output/android.tar.gz
