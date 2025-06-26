@@ -45,81 +45,142 @@ export const RegistrationPage = ({ deviceDetails }) => {
     }
   ], []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    console.log('### Log Step 4.1 : Form submission initiated');
-    
-    if (loading) return;
-    
-    setError(null);
-    setLoading(true);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  console.log('### Log Step 4.1 : Form submission initiated');
+  
+  if (loading) return;
 
-    try {
-      const sessionDeviceInfo = Session.get('capturedDeviceInfo');
-      const fcmDeviceToken = Session.get('deviceToken');
-      console.log('### Log Step 4.2: Session data:', JSON.stringify({
-        sessionDeviceInfo,
-        fcmDeviceToken
-      }));
+  setError(null);
+  setLoading(true);
 
-      if (!sessionDeviceInfo?.uuid || !fcmDeviceToken) {
-        throw new Error('Device information or FCM token not available');
-      }
+  try {
+    const sessionDeviceInfo = Session.get('capturedDeviceInfo');
+    const fcmDeviceToken = Session.get('deviceToken');
+    console.log('### Log Step 4.2: Session data:', JSON.stringify({
+      sessionDeviceInfo,
+      fcmDeviceToken
+    }));
 
-      if (sessionDeviceInfo.uuid !== deviceDetails) {
-        throw new Error('Device UUID mismatch');
-      }
+    if (!sessionDeviceInfo?.uuid || !fcmDeviceToken) {
+      throw new Error('Device information or FCM token not available');
+    }
 
-      const biometricSecret = Random.secret(32);
-      console.log('### Log Step 4.3: Generated biometric secret');
+    if (sessionDeviceInfo.uuid !== deviceDetails) {
+      throw new Error('Device UUID mismatch');
+    }
 
-      console.log('### Log Step 4.4: Calling users.register method...');
-      const registerUser = await Meteor.callAsync('users.register', {
-        ...formData,
-        sessionDeviceInfo,
-        fcmDeviceToken,
-        biometricSecret
-      });
+    const biometricSecret = Random.secret(32);
+    console.log('### Log Step 4.3: Generated biometric secret');
 
-      console.log('### Log Step 4.5: Registration response:', JSON.stringify(registerUser));
+    console.log('### Log Step 4.4: Calling users.register method...');
+    const registerUser = await Meteor.callAsync('users.register', {
+      ...formData,
+      sessionDeviceInfo,
+      fcmDeviceToken,
+      biometricSecret
+    });
 
-      if (registerUser?.userId) {
-        console.log('### Log Step 4.6: Registration successful');
-        
-        // Store user info with registration details for use after biometric handling
+    console.log('### Log Step 4.5: Registration response:', JSON.stringify(registerUser));
+
+    // Handle secondary device approval flow
+    if (registerUser?.userAction && registerUser.isSecondaryDevice) {
+      console.log('### Log Step 4.5.1: Secondary device registration, userAction:', registerUser.userAction);
+
+      if (registerUser.userAction === 'approve') {
+        // Approved by primary device - proceed biometric modal or app flow
         const userPayload = {
           userId: registerUser.userId,
           email: formData.email,
           username: formData.username,
           biometricSecret,
-          isFirstDevice: registerUser.isFirstDevice,
-          registrationStatus: registerUser.registrationStatus
+          isFirstDevice: false,
+          registrationStatus: 'approved'
         };
-        
         setRegisteredUser(userPayload);
-        
-        // Proceed to biometric modal immediately after successful registration
+
         setTimeout(() => {
-          console.log('### Opening biometric modal');
+          console.log('### Opening biometric modal for secondary device after approval');
           setShowBiometricModal(true);
         }, 0);
+
+      } else if (registerUser.userAction === 'reject') {
+        setError('Your secondary device registration was rejected by the primary device.');
+      } else if (registerUser.userAction === 'timeout') {
+        setError('Secondary device approval request timed out. Please try again later.');
       }
-    } catch (err) {
-      console.error('### Log Step ERROR:', err);
-      setError(err.reason || err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
+      // Stop further flow here
+      return;
     }
-  };
+
+    // Handle first device / regular flow
+    if (registerUser?.userId) {
+      console.log('### Log Step 4.6: Registration successful');
+
+      const userPayload = {
+        userId: registerUser.userId,
+        email: formData.email,
+        username: formData.username,
+        biometricSecret,
+        isFirstDevice: registerUser.isFirstDevice,
+        registrationStatus: registerUser.registrationStatus
+      };
+
+      setRegisteredUser(userPayload);
+
+      // Open biometric modal immediately after successful registration
+      setTimeout(() => {
+        console.log('### Opening biometric modal for first device');
+        setShowBiometricModal(true);
+      }, 0);
+
+    } else if (registerUser?.registrationStatus) {
+      const regStatus = registerUser.registrationStatus;
+
+      if (regStatus === 'pending') {
+        console.log('### Log Step 4.8: First device registration pending approval');
+        setRegistrationStatus('pending');
+        setShowPendingScreen(true);
+
+      } else if (regStatus === 'approved') {
+        console.log('### Log Step 4.9: Registration fully completed, redirecting to login');
+        navigate('/login');
+
+      } else if (regStatus === 'rejected') {
+        console.log('### Log Step 4.10: Registration rejected, redirecting to rejection screen or showing error');
+        setError('Your registration has been rejected. Please contact support.');
+        // Optionally navigate('/rejectedRegistration');
+
+      } else {
+        // Fallback if user data is missing or unknown status
+        console.log('### Log Step 4.11: Unknown registration status, redirecting to login');
+        navigate('/login');
+      }
+    } else {
+      // Fallback if no userId or registrationStatus at all
+      console.log('### Log Step 4.12: No valid user data found after registration, redirecting to login');
+      navigate('/login');
+    }
+
+  } catch (err) {
+    console.error('### Log Step ERROR:', err);
+    setError(err.reason || err.message || 'Registration failed');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
 
   const handleBiometricComplete = useCallback((wasSuccessful) => {
-    console.log('### Log Step 4.7: Biometric completion:', wasSuccessful);
-    setShowBiometricModal(false);
-    
-    // Now check registration status after biometric handling is done
-    if (registeredUser) {
-      if (registeredUser.isFirstDevice && registeredUser.registrationStatus === 'pending') {
-        console.log('### Log Step 4.8: First device registration pending approval');
+  console.log('### Log Step 4.7: Biometric completion:', wasSuccessful);
+  setShowBiometricModal(false);
+ 
+    //Now check registration status after biometric handling is done
+  if (registeredUser) {
+    if (registeredUser.isFirstDevice && registeredUser.registrationStatus === 'pending') {
+      console.log('### Log Step 4.8: First device registration pending approval');
         setRegistrationStatus('pending');
         setShowPendingScreen(true);
       } else {

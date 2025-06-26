@@ -1,0 +1,57 @@
+name: Build and Upload Meteor Server on Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Meteor
+        run: curl https://install.meteor.com/ | sh
+
+      - name: Install NPM Dependencies
+        run: meteor npm install
+
+      - name: Decode google-services.json from Secret
+        run: |
+          mkdir -p public/android
+          echo "${{ secrets.FIREBASE_SERVICES_PROD }}" | base64 -d > public/android/google-services.json
+
+      - name: Build Meteor Server (Server Only)
+        run: |
+          meteor build ./server-build \
+            --directory \
+            --server=https://auth.mieweb.org \
+            --server-only
+
+      - name: Clean Unnecessary Files
+        run: |
+          # Delete Cordova build artifacts if any (defensive)
+          rm -rf server-build/programs/web.cordova
+          rm -rf server-build/public/android
+
+      - name: Tar the server bundle
+        run: |
+          cd server-build
+          tar -czf ../meteor-server.tar.gz *
+
+      - name: Upload Tarball to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: meteor-server.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

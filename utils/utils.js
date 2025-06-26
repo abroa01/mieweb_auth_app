@@ -23,7 +23,8 @@ export const formatDateTime = (isoString) => {
     const tokenRecord = await ApprovalTokens.findOneAsync({
       userId,
       token,
-      expiresAt: { $gt: new Date() }
+      expiresAt: { $gt: new Date() },
+      used: false
     });
 
     return tokenRecord;

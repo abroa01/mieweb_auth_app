@@ -1,29 +1,14 @@
 import React from 'react';
 import {
-  CheckCircle,
-  XCircle,
   Clock,
-  AlertTriangle // For timeout or error
+  AlertTriangle, // For timeout or error
+  Smartphone
 } from 'lucide-react';
 import { formatDateTime } from '../../../../../utils/utils.js'; // Adjust path
 
-const StatusIndicator = ({ status }) => {
-  switch (status) {
-    case 'approved':
-      return <CheckCircle className="text-green-500" size={18} title="Approved" />;
-    case 'rejected':
-      return <XCircle className="text-red-500" size={18} title="Rejected" />;
-    case 'pending':
-      return <Clock className="text-yellow-500" size={18} title="Pending" />;
-    case 'timeout':
-      return <AlertTriangle className="text-orange-500" size={18} title="Timeout" />;
-    default:
-      return <Clock className="text-gray-500" size={18} title="Unknown" />;
-  }
-};
 
 export const NotificationList = ({ notifications, isLoading, error }) => {
-  
+
   if (isLoading) {
     return (
       <div className="text-center p-6 text-gray-500 dark:text-gray-400">
@@ -47,50 +32,53 @@ export const NotificationList = ({ notifications, isLoading, error }) => {
 
   if (!notifications || notifications.length === 0) {
     return (
-      <div className="text-center p-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+      <div className="text-center p-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg mx-2 ">
         No notification history found.
       </div>
     );
   }
 
+
+
   return (
-    <div className="overflow-x-auto bg-white dark:bg-gray-800 shadow-md rounded-lg">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead className="bg-gray-50 dark:bg-gray-700">
-          <tr>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-1/12">
-              Status
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-3/12">
-              Title
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-5/12">
-              Body
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-3/12">
-              Timestamp
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {notifications.map((notification) => (
-            <tr key={notification._id || notification.notificationId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap">
-                <StatusIndicator status={notification.status} />
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                {notification.title}
-              </td>
-              <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                {notification.body}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {formatDateTime(notification.createdAt)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      {notifications.map((notification) => {
+        console.log("Notification status", notification.status)
+        return (
+          <div
+            key={notification._id}
+            className="bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 rounded-2xl shadow-lg p-6 m-2"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  {notification.title}
+                </h3>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    {formatDateTime(notification.createdAt)}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center">
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    Iphone 16
+                  </p>
+                </div>
+              </div>
+              <div
+                className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${notification.status === "approve"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                    : notification.status === "reject"
+                      ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                  }`}
+              >
+                {notification.status}
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   );
 }; 

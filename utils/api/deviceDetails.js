@@ -46,15 +46,15 @@ if (Meteor.isServer) {
 
 // Define methods for DeviceDetails
 Meteor.methods({
-  /**
+ /**
  * Upsert device details
  * @param {Object} data - Device details data
  * @returns {String} Generated appId
  */
 'deviceDetails': async function(data) {
-  console.log(" ### Log Step 6 : Inside /utils/api/deviceDetails.js and checking all the data received");
+  console.log(" ### Log Step 6 : Inside deviceDetails.js and checking all the data received");
   
-  // Extended check to include new fields
+  // Extended check to include all required fields
   check(data, Match.ObjectIncluding({
     username: String,
     biometricSecret: String,
@@ -64,31 +64,63 @@ Meteor.methods({
     fcmToken: String,
     firstName: String,
     lastName: String,
-    approvalStatus: Match.Maybe(String),
-    isPrimary: Match.Maybe(Boolean)
+    isFirstDevice: Match.Maybe(Boolean),
+    isSecondaryDevice: Match.Maybe(Boolean)
   }));
   
+  // Generate appId
   const creationTime = new Date().toISOString();
   const appId = generateAppId(data.deviceUUID, data.username, creationTime);
-  console.log(" ### Log Step 6.1  : Inside /utils/api/deviceDetails.js,  generating app Id", JSON.stringify({appId}));
-  
-  const userDeviceDoc = await DeviceDetails.findOneAsync({ userId: data.userId });
-  console.log(`### Log Step 6.2 : Inside /utils/api/deviceDetails.js, fetching existing device details if any(against userId : ${data.userId}), userDeviceDoc: ${JSON.stringify(userDeviceDoc)}`);
-  
-  // Set default values for new fields
-  const approvalStatus = data.approvalStatus || 'approved';
-  const isPrimary = data.isPrimary !== undefined ? data.isPrimary : false;
-  
-  if (userDeviceDoc) {
-    // Check if device already exists
-    const existingDeviceIndex = userDeviceDoc.devices.findIndex(
+  console.log(" ### Log Step 6.1 : Inside deviceDetails.js, generating app Id", JSON.stringify({appId}));
+  let isRequireAdminApproval, isRequireSecondaryDeviceApproval = null;
+
+  // Check if this is the first device
+  if (data.isFirstDevice) {
+    // First device registration for first time user
+    console.log('### Log Step 6.2 : Inside deviceDetails.js, Create new user document with first device');
+    
+    await DeviceDetails.insertAsync({
+      userId: data.userId,
+      email: data.email,
+      username: data.username,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      devices: [{
+        deviceUUID: data.deviceUUID,
+        appId: appId,
+        biometricSecret: data.biometricSecret,
+        fcmToken: data.fcmToken,
+        isFirstDevice: true,
+        isPrimary: true,
+        isSecondaryDevice: false,
+        deviceRegistrationStatus: 'pending',
+        lastUpdated: new Date()
+      }],
+      createdAt: new Date(),
+      lastUpdated: new Date()
+    });
+    
+    return {appId, isRequireAdminApproval: true};
+  } else {
+    // Not the first device, set isSecondaryDevice = true
+    
+    // Get the existing details against the user
+    const existingDevices = await DeviceDetails.findOneAsync({ userId: data.userId });
+    console.log(`### Log Step 6.2 : Inside deviceDetails.js, fetching existing device details:`, existingDevices);
+    
+    if (!existingDevices) {
+      // Handle case where user doesn't exist but isFirstDevice is false
+      console.log('### Warning: User not found but isFirstDevice is false');
+      throw new Meteor.Error('user-not-found', 'User not found but isFirstDevice is false');
+    }
+    
+    const existingDeviceIndex = existingDevices.devices.findIndex(
       device => device.deviceUUID === data.deviceUUID
     );
-    console.log(`### Log Step 6.2 : Inside /utils/api/deviceDetails.js, fetching existing device details, existingDeviceIndex: ${existingDeviceIndex}`);
     
     if (existingDeviceIndex !== -1) {
       // Update existing device
-      console.log(`### Log Step 6.3 : Inside /utils/api/deviceDetails.js, Existing device details found and updating it, existingDeviceIndex: ${existingDeviceIndex}`);
+      console.log(`### Log Step 6.3 : Inside deviceDetails.js, Existing device details found and updating it, existingDeviceIndex: ${existingDeviceIndex}`);
       await DeviceDetails.updateAsync(
         { userId: data.userId },
         {
@@ -99,19 +131,21 @@ Meteor.methods({
             lastName: data.lastName,
             lastUpdated: new Date(),
             [`devices.${existingDeviceIndex}.deviceUUID`]: data.deviceUUID,
-            [`devices.${existingDeviceIndex}.appId`]: userDeviceDoc.devices[existingDeviceIndex].appId,
+            [`devices.${existingDeviceIndex}.appId`]: existingDevices.devices[existingDeviceIndex].appId,
             [`devices.${existingDeviceIndex}.biometricSecret`]: data.biometricSecret,
             [`devices.${existingDeviceIndex}.fcmToken`]: data.fcmToken,
-            [`devices.${existingDeviceIndex}.approvalStatus`]: approvalStatus,
-            [`devices.${existingDeviceIndex}.isPrimary`]: isPrimary,
+            [`devices.${existingDeviceIndex}.deviceRegistrationStatus`]: 'pending',
+            [`devices.${existingDeviceIndex}.isFirstDevice`]: false,
+            [`devices.${existingDeviceIndex}.isPrimary`]: false,
+            [`devices.${existingDeviceIndex}.isSecondaryDevice`]: true,
             [`devices.${existingDeviceIndex}.lastUpdated`]: new Date()
           }
         }
       );
-      return userDeviceDoc.devices[existingDeviceIndex].appId;
+      return { appId: existingDevices.devices[existingDeviceIndex].appId, isRequireSecondaryDeviceApproval: true };
     } else {
       // Add new device to existing user document
-      console.log('### Log Step 6.3 : Inside /utils/api/deviceDetails.js, Existing device details not found thus creating a new device details against the existing user');
+      console.log('### Log Step 6.3 : Inside deviceDetails.js, Existing device details not found thus creating a new device details against the existing user');
       await DeviceDetails.updateAsync(
         { userId: data.userId },
         {
@@ -121,8 +155,10 @@ Meteor.methods({
               appId: appId,
               biometricSecret: data.biometricSecret,
               fcmToken: data.fcmToken,
-              approvalStatus: approvalStatus,
-              isPrimary: isPrimary,
+              deviceRegistrationStatus: 'pending',
+              isFirstDevice: false,
+              isPrimary: false,
+              isSecondaryDevice: true,
               lastUpdated: new Date()
             }
           },
@@ -135,30 +171,8 @@ Meteor.methods({
           }
         }
       );
-      return appId;
+      return {appId, isRequireSecondaryDeviceApproval: true};
     }
-  } else {
-    // Create new user document with first device
-    console.log('### Log Step 6.4 : Inside /utils/api/deviceDetails.js, Create new user document with first device ');
-    await DeviceDetails.insertAsync({
-      userId: data.userId,
-      email: data.email,
-      username: data.username,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      devices: [{
-        deviceUUID: data.deviceUUID,
-        appId: appId,
-        biometricSecret: data.biometricSecret,
-        fcmToken: data.fcmToken,
-        approvalStatus: approvalStatus,
-        isPrimary: isPrimary,
-        lastUpdated: new Date()
-      }],
-      createdAt: new Date(),
-      lastUpdated: new Date()
-    });
-    return appId;
   }
 },
 
@@ -201,6 +215,23 @@ Meteor.methods({
     const userDoc = await DeviceDetails.findOneAsync({ username });
     if (!userDoc) {
       throw new Meteor.Error('invalid-username', 'No device found with this Username');
+    }
+    
+    // Return array of FCM tokens from all devices
+    return userDoc.devices.map(device => device.fcmToken);
+  },
+
+    /**
+   * Get all FCM tokens by username
+   * @param {String} userId - User ID
+   * @returns {Array} Array of FCM tokens
+   */
+  'deviceDetails.getFCMTokenByUserId': async function(userId) {
+    check(userId, String);
+    
+    const userDoc = await DeviceDetails.findOneAsync({ userId });
+    if (!userDoc) {
+      throw new Meteor.Error('invalid-username', 'No device found with this UserId');
     }
     
     // Return array of FCM tokens from all devices

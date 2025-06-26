@@ -1,0 +1,14 @@
+{
+    "public": {
+        "fcm": {
+            "enabled": true
+          },
+          "packages":{
+            "accounts":{
+                "clientStorage":"session",
+                "sessionManagement": true
+            }
+          }
+          
+    }
+}

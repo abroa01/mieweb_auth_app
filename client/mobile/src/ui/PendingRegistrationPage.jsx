@@ -58,7 +58,7 @@ const PendingRegistrationPage = () => {
         <div className="border-t border-gray-200 pt-4">
           <div className="flex flex-col space-y-3">
             <Link 
-              to="/" 
+              to="/login" 
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
               Return to Home

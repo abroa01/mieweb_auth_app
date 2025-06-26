@@ -129,10 +129,21 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+settings.json
+
 
 server/private/google-services.json
 server/private/miewebauthapp-ffab4fc33682.json
 server/private/AuthKey_25AZQU2X57.p8
 server/private/GoogleService-Info.plist
 
-server/private
+server/private/*
+public/android/google-services.json
+public/android/GoogleService-Info.plist
+
+mieauth-release-key.jks
+mieauth-release-key.jks.base64
+screenshots/
+
+public
+.github/workflows/build-android-apk-dev-on-release.yml

@@ -124,3 +124,45 @@ export const rejectionTemplate = () => `
 </body>
 </html>
 `;
+
+export const previouslyUsedTemplate = () => `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Action Already Taken</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+              text-align: center;
+            }
+            .info-message {
+              background-color: #2196F3;
+              color: white;
+              padding: 20px;
+              border-radius: 5px;
+              margin-top: 30px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 {
+              margin-bottom: 10px;
+            }
+            p {
+              font-size: 16px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="info-message">
+            <h1>Action Already Taken</h1>
+            <p>This approval/rejection link has already been used.</p>
+            <p>The user's status was previously set. </strong></p>
+            <p>No further action is needed.</p>
+          </div>
+        </body>
+        </html>
+      `;

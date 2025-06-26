@@ -1,7 +1,7 @@
 #!/bin/bash
 
-PUSHGATEWAY="http://localhost:3000"
-RELYINGPARTY="abrol"
+PUSHGATEWAY="https://aabrol-mieauth.dev.bluehive.com"
+RELYINGPARTY="aa"
 #USERID=
 
 curl -X POST "$PUSHGATEWAY/send-notification" \
