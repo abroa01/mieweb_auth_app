@@ -348,29 +348,35 @@ WebApp.connectHandlers.use('/api/reject-user', async (req, res) => {
   const isValid = await isValidToken(userId, token);
 
   if (isValid) {
-    // Mark token as used with 'rejected' action
-    await ApprovalTokens.updateAsync(
-      { userId, token },
-      {
-        $set: {
-          used: true,
-          action: 'rejected',
-          usedAt: new Date()
+    try {
+      // Mark token as used with 'rejected' action
+      await ApprovalTokens.updateAsync(
+        { userId, token },
+        {
+          $set: {
+            used: true,
+            action: 'rejected',
+            usedAt: new Date()
+          }
         }
-      }
-    );
+      );
 
-    // Update user's registration status
-    await Meteor.users.updateAsync(
-      { _id: userId },
-      { $set: { 'profile.registrationStatus': 'rejected' } }
-    );
+      // Remove user completely instead of just marking as rejected
+      console.log(`Admin rejected user ${userId}, removing completely`);
+      await Meteor.callAsync('users.removeCompletely', userId);
 
-    // Return rejection page
-    res.writeHead(200, {
-      'Content-Type': 'text/html'
-    });
-    res.end(rejectionTemplate());
+      // Return rejection page
+      res.writeHead(200, {
+        'Content-Type': 'text/html'
+      });
+      res.end(rejectionTemplate());
+    } catch (error) {
+      console.error('Error during user rejection:', error);
+      res.writeHead(500, {
+        'Content-Type': 'text/html'
+      });
+      res.end(errorTemplate());
+    }
   } else {
     // Check if token was previously used (same logic as approve route)
     const usedToken = await ApprovalTokens.findOneAsync({
@@ -1097,6 +1103,104 @@ Meteor.methods({
 
     console.log(`Generated approval token for user ${userId}, expires in 3 minutes`);
     return token;
+  },
+
+  /**
+   * Clean up users with expired approval tokens
+   * @returns {Object} Cleanup result with counts
+   */
+  'users.cleanupExpiredApprovals': async function() {
+    console.log('Starting cleanup of users with expired approval tokens...');
+    
+    const now = new Date();
+    let cleanedUsersCount = 0;
+    let cleanedDevicesCount = 0;
+    let cleanedTokensCount = 0;
+
+    try {
+      // Find all expired tokens that haven't been used
+      const expiredTokens = await ApprovalTokens.find({
+        expiresAt: { $lt: now },
+        used: false
+      }).fetchAsync();
+
+      console.log(`Found ${expiredTokens.length} expired tokens to clean up`);
+
+      for (const token of expiredTokens) {
+        const { userId } = token;
+
+        // Check if user is still pending (not approved) - extra safety check
+        const user = await Meteor.users.findOneAsync({ _id: userId });
+        if (user && user.profile?.registrationStatus === 'pending') {
+          console.log(`Removing user ${userId} with expired approval token`);
+
+          // Remove user from Meteor.users collection
+          await Meteor.users.removeAsync({ _id: userId });
+          cleanedUsersCount++;
+
+          // Remove user's device details
+          const deviceRemoveResult = await DeviceDetails.removeAsync({ userId });
+          if (deviceRemoveResult) {
+            cleanedDevicesCount++;
+          }
+
+          console.log(`Removed user ${userId} and associated device details`);
+        }
+
+        // Remove the expired token
+        await ApprovalTokens.removeAsync({ _id: token._id });
+        cleanedTokensCount++;
+      }
+
+      const result = {
+        success: true,
+        cleanedUsers: cleanedUsersCount,
+        cleanedDevices: cleanedDevicesCount,
+        cleanedTokens: cleanedTokensCount,
+        message: `Cleanup completed: ${cleanedUsersCount} users, ${cleanedDevicesCount} device records, and ${cleanedTokensCount} tokens removed`
+      };
+
+      console.log(result.message);
+      return result;
+
+    } catch (error) {
+      console.error('Error during expired approval cleanup:', error);
+      throw new Meteor.Error('cleanup-failed', error.message);
+    }
+  },
+
+  /**
+   * Remove user completely (used for rejected users)
+   * @param {String} userId - User ID to remove
+   * @returns {Object} Removal result
+   */
+  'users.removeCompletely': async function(userId) {
+    check(userId, String);
+    
+    console.log(`Completely removing user ${userId}`);
+    
+    try {
+      // Remove user from Meteor.users collection
+      const userRemoved = await Meteor.users.removeAsync({ _id: userId });
+      
+      // Remove user's device details
+      const deviceRemoved = await DeviceDetails.removeAsync({ userId });
+      
+      // Remove any pending approval tokens
+      const tokensRemoved = await ApprovalTokens.removeAsync({ userId });
+      
+      console.log(`User removal complete - User: ${userRemoved}, Devices: ${deviceRemoved}, Tokens: ${tokensRemoved}`);
+      
+      return {
+        success: true,
+        userRemoved: userRemoved > 0,
+        deviceRemoved: deviceRemoved > 0,
+        tokensRemoved: tokensRemoved > 0
+      };
+    } catch (error) {
+      console.error(`Error removing user ${userId}:`, error);
+      throw new Meteor.Error('user-removal-failed', error.message);
+    }
   }
 });
 
@@ -1122,4 +1226,21 @@ Meteor.startup(() => {
     throw new Error("ENV variable is required. Please set ENV=dev or ENV=prod");
   }
   console.log("Email service configured");
+
+  // Start background cleanup job for expired approval tokens
+  // Run every 2 minutes to clean up expired tokens (tokens expire after 3 minutes)
+  const cleanupInterval = 2 * 60 * 1000; // 2 minutes in milliseconds
+  
+  Meteor.setInterval(async () => {
+    try {
+      const result = await Meteor.callAsync('users.cleanupExpiredApprovals');
+      if (result.cleanedUsers > 0) {
+        console.log('Background cleanup completed:', result.message);
+      }
+    } catch (error) {
+      console.error('Background cleanup failed:', error);
+    }
+  }, cleanupInterval);
+
+  console.log(`Background cleanup job started - running every ${cleanupInterval / 1000} seconds`);
 });
